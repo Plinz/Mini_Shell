@@ -78,7 +78,7 @@ int extra_cmd(char** word){
 	if (strcmp(word[0],"jobs") == 0){
 		for (int i=0; i<p; i++)
 			printf("[%d]+ En cours d'exécution pid=%d\n", i+1, jobs[i]); 
-		ret = 1;;	
+		ret = 1;	
 	} else if (strcmp(word[0],"fg") == 0){
 		if ((pid = atoi(word[1])) > 0)
 			waitpid(pid, NULL, 0);
@@ -106,7 +106,7 @@ int main()
 	while (1) {
 		struct cmdline *l;
 		
-		printf("shell> ");
+		printf("\x1b[31mminiShell>\x1b[31m");
 		l = readcmd();
 
 		/* If input stream closed, normal termination */

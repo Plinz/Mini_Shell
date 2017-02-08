@@ -1,11 +1,11 @@
 CC=gcc
 CFLAGS=-Wall -g
 
-all: tst shell
+all: miniShell shell
 
-tst: tst.o readcmd.o
+miniShell: miniShell.o readcmd.o
 
 shell: shell.o readcmd.o
 
 clean:
-	rm -f shell shell.o readcmd.o tst tst.o
+	rm -f shell shell.o readcmd.o miniShell miniShell.o
