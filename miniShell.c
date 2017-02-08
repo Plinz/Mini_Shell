@@ -14,7 +14,8 @@
 #include "readcmd.h"
 
 int jobs[100];
-int p = 0;
+int currentIndex = 0;
+int nbJobs = 0;
 
 void handler_ctrlC(int sig){
 	printf("Control-C reçu ! \n");
@@ -30,9 +31,9 @@ void handler_child(int sig){
 	//printf("pid=%d et p=%d\n",pid, p);
 	if (pid > 0){
 		int i;
-		for (i=0; i<p && jobs[i]!=pid ; i++);		
-		jobs[i] = jobs[p-1];
-		p--;
+		for (i=0; i<currentIndex && jobs[i]!=pid ; i++);		
+		jobs[i] = -1;
+		currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
 	}
 	
 }
@@ -66,7 +67,7 @@ void run_cmd(struct cmdline *l){
 		}
 	}
 	if(l->bg){
-		jobs[p++] = pid;
+		jobs[currentIndex++] = pid;
 	} else {
 		waitpid(pid,NULL,0);
 	}
@@ -76,8 +77,9 @@ int extra_cmd(char** word){
 	int ret = 0;
 	int pid;
 	if (strcmp(word[0],"jobs") == 0){
-		for (int i=0; i<p; i++)
-			printf("[%d]+ En cours d'exécution pid=%d\n", i+1, jobs[i]); 
+		for (int i=0; i<currentIndex; i++)
+			if (jobs[i] != -1)
+				printf("[%d]+ En cours d'exécution pid=%d\n", i+1, jobs[i]); 
 		ret = 1;	
 	} else if (strcmp(word[0],"fg") == 0){
 		if ((pid = atoi(word[1])) > 0)
