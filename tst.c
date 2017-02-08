@@ -51,6 +51,7 @@ void run_cmd(struct cmdline *l){
 	while(l->seq[index]!=0){
 		pipe(pipefd);
 		if((pid = fork()) == 0){
+			if (l->bg)                                      setpgid(pid, pid);
 			if (index == 0 && l->in != NULL) 		redirection(l->in,0);
 			else  						dup2(fd_in, 0);
 			if (l->seq[index+1] == 0 && l->out != NULL)	redirection(l->out,1);
