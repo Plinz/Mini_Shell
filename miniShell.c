@@ -1,4 +1,5 @@
 #define _POSIX_SOURCE
+#define _DEFAULT_SOURCE
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -97,6 +98,19 @@ int extra_cmd(char** word){
 	return ret;
 }
 
+void display_prompt() {
+	char * u = getenv("USER");
+	char * p = malloc(100);
+	p = getcwd(p,100);
+	char h[10];
+	int i = gethostname(h,10);
+	i++;
+	printf("%s@%s %s $ ",u,h,p);
+	fflush(stdout);
+	free(p);
+}
+
+
 int main()
 {
 
@@ -107,7 +121,7 @@ int main()
 	while (1) {
 		struct cmdline *l;
 		
-		printf("miniShell>");
+		display_prompt();
 		l = readcmd();
 
 		/* If input stream closed, normal termination */
