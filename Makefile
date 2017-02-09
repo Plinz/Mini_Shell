@@ -1,11 +1,9 @@
 CC=gcc
-CFLAGS=-Wall -g
+CFLAGS=-Wall -g -std=c99 -Werror
 
-all: miniShell shell
+all: miniShell
 
 miniShell: miniShell.o readcmd.o
-
-shell: shell.o readcmd.o
 
 clean:
 	rm -f shell shell.o readcmd.o miniShell miniShell.o

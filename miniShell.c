@@ -1,7 +1,4 @@
-/*
- * Copyright (C) 2002, Simon Nieuviarts
- */
-
+#define _POSIX_SOURCE
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -53,6 +50,8 @@ void run_cmd(struct cmdline *l){
 		pipe(pipefd);
 		if((pid = fork()) == 0){
 			if (l->bg)                                      setpgid(pid, pid);
+			else{						signal(SIGINT,  SIG_DFL);
+									signal(SIGTSTP, SIG_DFL);}	
 			if (index == 0 && l->in != NULL) 		redirection(l->in,0);
 			else  						dup2(fd_in, 0);
 			if (l->seq[index+1] == 0 && l->out != NULL)	redirection(l->out,1);
@@ -76,9 +75,9 @@ void run_cmd(struct cmdline *l){
 
 int extra_cmd(char** word){
 	int ret = 0;
-	int pid;
+	int pid, i;
 	if (strcmp(word[0],"jobs") == 0){
-		for (int i=0; i<currentIndex; i++)
+		for (i=0; i<currentIndex; i++)
 			if (jobs[i] != -1)
 				printf("[%d]+ En cours d'exécution pid=%d\n", i+1, jobs[i]); 
 		ret = 1;	
@@ -105,11 +104,10 @@ int main()
 	signal(SIGTSTP, SIG_IGN);
 	signal(SIGCHLD, handler_child);
 
-
 	while (1) {
 		struct cmdline *l;
 		
-		printf("\x1b[31mminiShell>\x1b[31m");
+		printf("miniShell>");
 		l = readcmd();
 
 		/* If input stream closed, normal termination */
@@ -138,6 +136,8 @@ int main()
 		}**/
 		if(l->seq[0]!=0 && !extra_cmd(l->seq[0]))
 			run_cmd(l);
+		else
+			printf("\n");
 	}
 }
 
