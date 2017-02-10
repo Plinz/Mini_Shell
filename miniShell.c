@@ -43,7 +43,7 @@ void handler_child(int sig){
 			if (i != currentIndex){		
 				jobs[i] = -1;
 				currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
-				printf("\n[%d]+ Fini 		pid=%d\n", i+1, sig, pid);
+				printf("\n[%d]+ Fini 		pid=%d\n", i+1, pid);
 				display_prompt();
 			}
 		} else {
@@ -101,9 +101,20 @@ int extra_cmd(char** word){
 				printf("[%d]+ En cours d'exécution pid=%d\n", i+1, jobs[i]); 
 		ret = 1;	
 	} else if (strcmp(word[0],"fg") == 0){
-		if ((num = atoi(word[1])) > 0)
-			waitpid(num, NULL, 0);
-		ret = 1;	
+
+		if (word[1] != NULL){
+			if ((num = atoi(word[1])) > 0 && num <= currentIndex && jobs[num-1] != -1){
+				waitpid(jobs[num-1], NULL, 0);
+			} else
+				printf("shell: fg: %s : Tâche inexistante\n", word[1]);
+		} else {
+			for (i=currentIndex-1; i>=0 && jobs[i]==-1; i--);
+			if (i >= 0) 	
+				waitpid(jobs[i], NULL, 0);
+			else 		
+				printf("Aucun jobs en cours d'exécution\n");
+		}
+		ret = 1;		
 	} else if (strcmp(word[0],"bg") == 0){
 		if ((num = atoi(word[1])) > 0)
 			kill(num, SIGCONT);
