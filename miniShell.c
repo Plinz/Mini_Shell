@@ -15,6 +15,18 @@ int jobs[100];
 int currentIndex = 0;
 int nbJobs = 0;
 
+void display_prompt() {
+	char * u = getenv("USER");
+	char * p = malloc(100);
+	p = getcwd(p,100);
+	char h[50];
+	int i = gethostname(h,50);
+	i++;
+	printf("%s@%s %s $ ",u,h,p);
+	fflush(stdout);
+	free(p);
+}
+
 void handler_ctrlC(int sig){
 	printf("Control-C reçu ! \n");
 }
@@ -24,14 +36,19 @@ void handler_ctrlZ(int sig){
 }
 
 void handler_child(int sig){
-	int pid;
-	pid = waitpid(-1, NULL, WNOHANG|WUNTRACED);
-	//printf("pid=%d et p=%d\n",pid, p);
-	if (pid > 0){
-		int i;
-		for (i=0; i<currentIndex && jobs[i]!=pid ; i++);		
-		jobs[i] = -1;
-		currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
+	int pid, i;
+	while ((pid = waitpid(-1, NULL, WNOHANG|WUNTRACED)) > 0){
+		if (kill(pid,0) == -1){
+			for (i=0; i<currentIndex && jobs[i]!=pid ; i++);
+			if (i != currentIndex){		
+				jobs[i] = -1;
+				currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
+				printf("\n[%d]+ Fini 		pid=%d\n", i+1, sig, pid);
+				display_prompt();
+			}
+		} else {
+			printf("Arrêt du process detecté mais pas encore géré");
+		}
 	}
 	
 }
@@ -68,7 +85,8 @@ void run_cmd(struct cmdline *l){
 		}
 	}
 	if(l->bg){
-		jobs[currentIndex++] = pid;
+		jobs[currentIndex] = pid;
+		printf("[%d] %d\n",++currentIndex, pid);
 	} else {
 		waitpid(pid,NULL,0);
 	}
@@ -76,40 +94,27 @@ void run_cmd(struct cmdline *l){
 
 int extra_cmd(char** word){
 	int ret = 0;
-	int pid, i;
+	int num, i;
 	if (strcmp(word[0],"jobs") == 0){
 		for (i=0; i<currentIndex; i++)
 			if (jobs[i] != -1)
 				printf("[%d]+ En cours d'exécution pid=%d\n", i+1, jobs[i]); 
 		ret = 1;	
 	} else if (strcmp(word[0],"fg") == 0){
-		if ((pid = atoi(word[1])) > 0)
-			waitpid(pid, NULL, 0);
+		if ((num = atoi(word[1])) > 0)
+			waitpid(num, NULL, 0);
 		ret = 1;	
 	} else if (strcmp(word[0],"bg") == 0){
-		if ((pid = atoi(word[1])) > 0)
-			kill(pid, SIGCONT);
+		if ((num = atoi(word[1])) > 0)
+			kill(num, SIGCONT);
 		ret = 1;
 	} else if (strcmp(word[0],"stop") == 0){
-		if ((pid = atoi(word[1])) > 0)
-			kill(pid, SIGSTOP);
+		if ((num = atoi(word[1])) > 0)
+			kill(num, SIGSTOP);
 		ret = 1;	
 	}
 	return ret;
 }
-
-void display_prompt() {
-	char * u = getenv("USER");
-	char * p = malloc(100);
-	p = getcwd(p,100);
-	char h[10];
-	int i = gethostname(h,10);
-	i++;
-	printf("%s@%s %s $ ",u,h,p);
-	fflush(stdout);
-	free(p);
-}
-
 
 int main()
 {
@@ -150,7 +155,7 @@ int main()
 		}**/
 		if(l->seq[0]!=0 && !extra_cmd(l->seq[0]))
 			run_cmd(l);
-		else
+		else if (l->seq[0]==0)
 			printf("\n");
 	}
 }
