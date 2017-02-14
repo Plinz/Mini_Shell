@@ -10,10 +10,29 @@
 #include <unistd.h>
 #include <string.h>
 #include "readcmd.h"
+#include "jobs.h"
 
-int jobs[100];
+struct jobs_etat jobs[100];
 int currentIndex = 0;
 int nbJobs = 0;
+
+void changeEtat(int pid, int new_etat){
+	int i;
+	for(i = 0; i <= nbJobs && jobs[i].pid != pid;i++);
+	if(i>nbJobs)
+		printf("Le processus à changer d'état n'a pas été trouvé.\n");
+	else
+		jobs[i].etat = new_etat; 
+}
+
+struct jobs_etat createWithInfos(int pid, int etat, char * nom){
+	struct jobs_etat retour;
+	retour.pid = pid;
+	retour.etat = etat;
+	retour.nom = (char *)malloc(strlen(nom)+1);
+	retour.nom = nom;
+	return retour;
+}
 
 void display_prompt() {
 	char * u = getenv("USER");
@@ -29,10 +48,10 @@ void display_prompt() {
 
 void handler_child(int sig){
 	int pid, i;
-	while ((pid = waitpid(-1, NULL, WNOHANG|WUNTRACED)) > 0){
-		for (i=0; i<currentIndex && jobs[i]!=pid ; i++);
+	while ((pid = waitpid(-1, NULL, WNOHANG)) > 0){
+		for (i=0; i<currentIndex && jobs[i].pid!=pid ; i++);
 		if (i != currentIndex){		
-			jobs[i] = -1;
+			jobs[i].pid = -1;
 			currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
 			printf("\n[%d]+  Fini 		pid=%d\n", i+1, pid);
 			display_prompt();
@@ -74,13 +93,19 @@ void run_cmd(struct cmdline *l){
 		}
 	}
 	if(l->bg){
-		jobs[currentIndex] = pid;
-		printf("[%d] %d\n",++currentIndex, pid);
+		//Ajout là
+		jobs[currentIndex] = createWithInfos(pid,RUNNING,l->seq[0][0]);
+		//
+		currentIndex++;
+		printf("[%d] %d\n",currentIndex,pid);
 	} else {
 		waitpid(pid,&status,WUNTRACED);
 		if(WIFSTOPPED(status)){
-			jobs[currentIndex] = pid;
-			printf("\n[%d]+  Stoppé                 pid=%d\n",++currentIndex, pid);
+			//Ajout là
+			jobs[currentIndex] = createWithInfos(pid,STOPPED, l->seq[0][0]);
+			//
+			currentIndex++;
+			printf("\n[%d]+  %s                 pid=%d\n",currentIndex,etat_jobs[jobs[currentIndex-1].etat] ,pid);
 		}
 	}
 }
@@ -90,27 +115,29 @@ int extra_cmd(char** word){
 	int num, i;
 	if (strcmp(word[0],"jobs") == 0){
 		for (i=0; i<currentIndex; i++)
-			if (jobs[i] != -1)
-				printf("[%d]+ En cours d'exécution pid=%d\n", i+1, jobs[i]); 
+			if (jobs[i].pid != -1)
+				printf("[%d]+ %s pid=%d\n", i+1,etat_jobs[jobs[i].etat] ,jobs[i].pid); 
 		ret = 1;	
 	} else if (strcmp(word[0],"fg") == 0){
 
 		if (word[1] != NULL){
-			if ((num = atoi(word[1])) > 0 && num <= currentIndex && jobs[num-1] != -1){
-				waitpid(jobs[num-1], NULL, WUNTRACED);
+			if ((num = atoi(word[1])) > 0 && num <= currentIndex && jobs[num-1].pid != -1){
+				waitpid(jobs[num-1].pid, NULL, WUNTRACED);
 			} else
 				printf("shell: fg: %s : Tâche inexistante\n", word[1]);
 		} else {
-			for (i=currentIndex-1; i>=0 && jobs[i]==-1; i--);
+			for (i=currentIndex-1; i>=0 && jobs[i].pid==-1; i--);
 			if (i >= 0) 	
-				waitpid(jobs[i], NULL, 0);
+				waitpid(jobs[i].pid, NULL, 0);
 			else 		
 				printf("Aucun jobs en cours d'exécution\n");
 		}
 		ret = 1;		
 	} else if (strcmp(word[0],"bg") == 0){
-		if ((num = atoi(word[1])) > 0)
+		if ((num = atoi(word[1])) > 0){
 			kill(num, SIGCONT);
+			changeEtat(num,RUNNING);
+		}
 		ret = 1;
 	} else if (strcmp(word[0],"stop") == 0){
 		if ((num = atoi(word[1])) > 0)
