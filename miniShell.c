@@ -9,12 +9,15 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 #include "readcmd.h"
 #include "jobs.h"
+
 
 struct jobs_etat jobs[100];
 int currentIndex = 0;
 int nbJobs = 0;
+int toKill =0;
 
 int getIndexJobByPid(int pid){
 	int i;
@@ -51,6 +54,23 @@ void display_prompt() {
 	printf("%s@%s %s $ ",u,h,p);
 	fflush(stdout);
 	free(p);
+}
+
+void handler_ctrlc(int sig){
+	int i;	
+	for (i=0; i<currentIndex && jobs[i].pid!=toKill ; i++);
+	if (i != currentIndex){		
+		jobs[i].pid = -1;
+		currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
+		printf("\n[%d]+  Fini 		pid=%d\n", i+1, toKill);
+	}
+	kill(toKill, SIGINT);
+}
+
+void handler_ctrlz(int sig){
+	changeEtat(toKill,STOPPED);
+	printf("\n[%d]+  %s                 pid=%d\n",currentIndex,etat_jobs[jobs[currentIndex-1].etat] ,toKill);
+	kill(toKill, SIGTSTP);
 }
 
 void handler_child(int sig){
@@ -104,14 +124,17 @@ void run_cmd(struct cmdline *l){
 		jobs[currentIndex] = createWithInfos(pid,RUNNING,l->seq[0][0]);
 		//
 		currentIndex++;
+		nbJobs++;
 		printf("[%d] %d\n",currentIndex,pid);
 	} else {
+		toKill = pid;
 		waitpid(pid,&status,WUNTRACED);
 		if(WIFSTOPPED(status)){
 			//Ajout là
 			jobs[currentIndex] = createWithInfos(pid,STOPPED, l->seq[0][0]);
 			//
 			currentIndex++;
+			nbJobs++;
 			printf("\n[%d]+  %s                 pid=%d\n",currentIndex,etat_jobs[jobs[currentIndex-1].etat] ,pid);
 		}
 	}
@@ -129,21 +152,21 @@ int extra_cmd(char** word){
 
 		if (word[1] != NULL){
 			if (word[1][0] == '%' && (num = atoi(&word[1][1])) > 0 && num <= currentIndex && jobs[num-1].pid != -1){
-				setpgid(jobs[num-1].pid, getpgid(0));
+				toKill = jobs[num-1].pid;
 				kill(jobs[num-1].pid, SIGCONT);
 				waitpid(jobs[num-1].pid, NULL, WUNTRACED);
 			} else if (word[1][0] != '%' && (num = getIndexJobByPid(atoi(word[1]))) != -1){
-				setpgid(jobs[num].pid, getpgid(0));
+				toKill = jobs[num].pid;
 				kill(jobs[num].pid, SIGCONT);
 				waitpid(jobs[num].pid, NULL, WUNTRACED);
 			} else
 				printf("shell: fg: %s : Tâche inexistante\n", word[1]);
 		} else {
 			for (i=currentIndex-1; i>=0 && jobs[i].pid==-1; i--);
-			if (i >= 0) {
-				setpgid(jobs[i].pid, getpgid(0));
+			if (i >= 0) {	
+				toKill = jobs[i].pid;
 				kill(jobs[i].pid, SIGCONT);
-				waitpid(jobs[i].pid, NULL, 0);
+				waitpid(jobs[i].pid, NULL, WUNTRACED);
 			} else 		
 				printf("Aucun jobs en cours d'exécution\n");
 		}
@@ -167,8 +190,8 @@ int extra_cmd(char** word){
 int main()
 {
 
-	signal(SIGINT, SIG_IGN);
-	signal(SIGTSTP, SIG_IGN);
+	signal(SIGINT, handler_ctrlc);
+	signal(SIGTSTP, handler_ctrlz);
 	signal(SIGCHLD, handler_child);
 
 	while (1) {
