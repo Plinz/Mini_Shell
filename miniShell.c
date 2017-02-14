@@ -18,8 +18,8 @@ int nbJobs = 0;
 
 void changeEtat(int pid, int new_etat){
 	int i;
-	for(i = 0; i <= nbJobs && jobs[i].pid != pid;i++);
-	if(i>nbJobs)
+	for(i = 0; i < currentIndex && jobs[i].pid != pid;i++);
+	if(i == currentIndex)
 		printf("Le processus à changer d'état n'a pas été trouvé.\n");
 	else
 		jobs[i].etat = new_etat; 
@@ -30,7 +30,7 @@ struct jobs_etat createWithInfos(int pid, int etat, char * nom){
 	retour.pid = pid;
 	retour.etat = etat;
 	retour.nom = (char *)malloc(strlen(nom)+1);
-	retour.nom = nom;
+	strcpy(retour.nom,nom);
 	return retour;
 }
 
@@ -116,7 +116,7 @@ int extra_cmd(char** word){
 	if (strcmp(word[0],"jobs") == 0){
 		for (i=0; i<currentIndex; i++)
 			if (jobs[i].pid != -1)
-				printf("[%d]+ %s pid=%d\n", i+1,etat_jobs[jobs[i].etat] ,jobs[i].pid); 
+				printf("[%d]+ %s pid=%d \t %s \n", i+1,etat_jobs[jobs[i].etat] ,jobs[i].pid, jobs[i].nom); 
 		ret = 1;	
 	} else if (strcmp(word[0],"fg") == 0){
 
@@ -140,8 +140,10 @@ int extra_cmd(char** word){
 		}
 		ret = 1;
 	} else if (strcmp(word[0],"stop") == 0){
-		if ((num = atoi(word[1])) > 0)
+		if ((num = atoi(word[1])) > 0){
 			kill(num, SIGSTOP);
+			changeEtat(num, STOPPED);	
+		}
 		ret = 1;	
 	}
 	return ret;
