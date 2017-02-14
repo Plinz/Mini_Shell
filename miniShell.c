@@ -27,30 +27,17 @@ void display_prompt() {
 	free(p);
 }
 
-void handler_ctrlC(int sig){
-	printf("Control-C reçu ! \n");
-}
-
-void handler_ctrlZ(int sig){
-	printf("Control-Z reçu ! \n");
-}
-
 void handler_child(int sig){
 	int pid, i;
 	while ((pid = waitpid(-1, NULL, WNOHANG|WUNTRACED)) > 0){
-		if (kill(pid,0) == -1){
-			for (i=0; i<currentIndex && jobs[i]!=pid ; i++);
-			if (i != currentIndex){		
-				jobs[i] = -1;
-				currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
-				printf("\n[%d]+ Fini 		pid=%d\n", i+1, pid);
-				display_prompt();
-			}
-		} else {
-			printf("Arrêt du process detecté mais pas encore géré");
+		for (i=0; i<currentIndex && jobs[i]!=pid ; i++);
+		if (i != currentIndex){		
+			jobs[i] = -1;
+			currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
+			printf("\n[%d]+  Fini 		pid=%d\n", i+1, pid);
+			display_prompt();
 		}
-	}
-	
+	}		
 }
 
 void redirection(char* in_out, int pip){
@@ -64,6 +51,8 @@ void run_cmd(struct cmdline *l){
 	int index = 0;
 	int pipefd[2];
 	int fd_in = 0;
+	int status;
+
 	while(l->seq[index]!=0){
 		pipe(pipefd);
 		if((pid = fork()) == 0){
@@ -88,7 +77,11 @@ void run_cmd(struct cmdline *l){
 		jobs[currentIndex] = pid;
 		printf("[%d] %d\n",++currentIndex, pid);
 	} else {
-		waitpid(pid,NULL,0);
+		waitpid(pid,&status,WUNTRACED);
+		if(WIFSTOPPED(status)){
+			jobs[currentIndex] = pid;
+			printf("\n[%d]+  Stoppé                 pid=%d\n",++currentIndex, pid);
+		}
 	}
 }
 
@@ -104,7 +97,7 @@ int extra_cmd(char** word){
 
 		if (word[1] != NULL){
 			if ((num = atoi(word[1])) > 0 && num <= currentIndex && jobs[num-1] != -1){
-				waitpid(jobs[num-1], NULL, 0);
+				waitpid(jobs[num-1], NULL, WUNTRACED);
 			} else
 				printf("shell: fg: %s : Tâche inexistante\n", word[1]);
 		} else {
