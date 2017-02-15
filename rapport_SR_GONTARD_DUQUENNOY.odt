@@ -1,0 +1,84 @@
+﻿DUQUENNOY Antoine
+GONTARD Benjamin
+Groupe de TD numéro 2
+
+
+
+
+RAPPORT DE PROJET :
+MINI SHELL
+
+Structure gloable du programme : 
+
+Notre projet se découpe en plusieurs sous fichiers :
+
+-readcmd.c/.h :
+
+Contient une structure permettant de récupérer les commandes que l’utilisateur souhaite piper ainsi que les fonctions permettant de remplir cette structure (fonctions de parsing).
+Ces fichiers nous étaient fournis, cependant nous avons apporté une modification au niveau de la structure afin de savoir si l’utilsateur souhaite que la commande se réalise en background (arrière plan) ou si il souhaite qu’elle s’exécute en foreground (premier plan). Ce champ se nomme bg (pour background) et est de type entier.
+Nous avons aussi modifié la fonction readcmd afin de détecter le caractère spécial ‘&’ pour savoir si il faut lancer la commande en premier plan ou en arrière plan.
+
+-jobs.h :
+
+Contient des constantes STOPPED et RUNNING qui facilitent la lecture du code (plus explicite que des 0 ou des 1).
+Contient un tableau de chaînes de caractères pour éviter de stocker une chaîne de caractère ne pouvant contenir que deux valeurs distinctes (Stopped et Running).
+Contient une structure permettant de connaître différentes informations sur job en cours d’exécution, qu’il soit en pause ou non. Pour cela, on stocke son pid, le nom de la commande et l’état dans lequel celui-ci est (Stoppé ou en cours d’exécution). 
+ 
+
+-miniShell.c : 
+Contient le programme principal et les fonctions nous permettant de gérer la création de tubes, la communication entre le différentes commandes pipées et la gestion des signaux.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Réalisations : 
+
+-Gestion de commandes jointes par des tubes  :
+
+Il est possible de d’exécuter plusieurs commandes en parallèle. Ces commandes communiquent via des pipes.
+Le processus principal s’occupe de gérer les commandes qui seront lancées en parallèle et qui communiqueront via des tubes.
+Pour chaque commande, le processus principal crée un fils qui va exécuter sa commande avec la fonction « execvp ».
+
+-Gestion de la redirection d’entrée/sortie :
+
+Grâce au caractère clé ‘<’, il est possible de rediriger l’entrée standard par le fichier suivant le caractère clé ‘<’.
+De manière similaire, la sortie standard sera redirigée dans le fichier dont le nom suit le caractère spécial ‘>’.
+A noter que seule la dernière commande pipée redirige sa sortie dans le fichier de sortie et que seule la première commande pipée lit son entrée dans le fichier reçu. La première commande pipée écrit dans le tube et la dernière commande prend son entrée dans le tube. Si il y a plus de deux commandes pipées, alors les autres commandes prennent leur entrée dans le tube et écrivent dans le tube.
+
+-Execution de commandes en arrière plan :
+
+Si le caractère spécial ‘&’ est spécifié à la fin de la commande que le shell doit exécuter, alors celui-ci lance cette tâche en arrière plan.
+Pour cela, nous avons modifié la structure cmdline, qui nous avait été fournie.
+Nous avons ajouté un champ de type Integer nommé bg (pour background). Bg aura pour valeur 0 si l’utilisateur ne souhaite pas lancer sa commande en arrière plan et vaudra 1 si l’utilisateur souhaite lancer sa commande en premier plan. Dans le cas où l’utilisateur souhaite lancer sa commande en premier plan, le programme attends la fin de l’exécution de cette commande via la fonction waitpid avec pour paramètres (pid,0,UNTRACED).
+
+
+-Changer l’état du processus en premier plan :
+
+Afin de gérer les signaux que l’utilisateur envoi au shell via les commandes Control+C et Control+Z.
+Lorsque l’utilisateur effectue Control+C, alors la tâche exécutée en premier plan se termine.
+Lorsque l’utilisateur effectue Control+Z, alors la tâche exécutée en premier plan se met en pause.
+Pour réaliser cette étape, nous disposons d’une variable globale nommée fg nous permettant de connaître le pid du processus en premier plan.
+Nous avons donc définis des handlers qui nous permettent de surcharger les traitants par défaut des signaux SIGINT(envoyé par un Control+C)  et SIGTSTP (envoyé par un Control+Z). Ainsi, notre shell ne se ferme plus ni ne se met en pause lorsque l’utilisateur entre un Control+C ou un Control+Z. 
+Le programme principal traite les signaux SIGINT et SIGTSTP d’une manière particulière, là où  les fils gardent le traitant par défaut. 
+Lorsque le programme principal reçoit un signal SIGINT, il transmet celui-ci au processus qui s’exécute en premier plan si il y en a effectivement un (via kill(pid,SIGINT)), ce qui aura pour effet de fermer ce processus.
+La même méthode est utilisée pour le handler su signal SIGTSTP, à la différence qu’un traitement supplémentaire est effectué afin de mettre à jour la table des jobs (mettre le processus en premier plan dans la table des jobs et signifie que son état est en pause [STOPPED]).
+
+-Gestion des zombis :
+
+Pour éviter que les fichiers en arrière plan soient attendus par le shell, si nous savons qu’un processus doit s’exécuter en arrière (quand l’utilisateur le spécifie explicitement via le caractère clé &). 
+
+
+
