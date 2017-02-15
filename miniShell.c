@@ -17,7 +17,7 @@
 struct jobs_etat jobs[100];
 int currentIndex = 0;
 int nbJobs = 0;
-int toKill = -1;
+struct jobs_etat fg;
 
 int getIndexJobByPid(int pid){
 	int i;
@@ -57,17 +57,25 @@ void display_prompt() {
 }
 
 void handler_ctrlc(int sig){
-	if (toKill != -1)
-		kill(toKill, SIGINT);
 	printf("\n");
+	if (fg.pid != -1)
+		kill(fg.pid, SIGINT);
+	else
+		display_prompt();
 }
 
 void handler_ctrlz(int sig){
-	if (toKill != -1 && getIndexJobByPid(toKill) != -1){
-		changeEtat(toKill,STOPPED);
-		kill(toKill, SIGTSTP);
+	if (fg.pid != -1 && getIndexJobByPid(fg.pid) != -1){
+		changeEtat(fg.pid,STOPPED);
+		kill(fg.pid, SIGTSTP);
+	} else if (fg.pid != -1){
+		jobs[currentIndex] = createWithInfos(fg.pid,STOPPED, fg.nom);
+		kill(jobs[currentIndex].pid, SIGTSTP);
+		currentIndex++;
+		nbJobs++;
+		printf("\n[%d]+  %s\t\t\t%s\n",currentIndex,etat_jobs[jobs[currentIndex-1].etat] ,jobs[currentIndex-1].nom);
+		fg.pid = -1;
 	}
-	printf("\n");
 }
 
 void handler_child(int sig){
@@ -76,8 +84,9 @@ void handler_child(int sig){
 		for (i=0; i<currentIndex && jobs[i].pid!=pid ; i++);
 		if (i != currentIndex){		
 			jobs[i].pid = -1;
+			if (i == currentIndex - 1) currentIndex--;
 			currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
-			printf("\n[%d]+  Fini 		pid=%d\n", i+1, pid);
+			printf("\n[%d]+  Fini\t\t\t%s\n", i+1, jobs[i].nom);
 			display_prompt();
 		}
 	}		
@@ -95,7 +104,7 @@ void run_cmd(struct cmdline *l){
 	int pipefd[2];
 	int fd_in = 0;
 	int status;
-
+	fg = createWithInfos(-1,STOPPED, "");
 	while(l->seq[index]!=0){
 		pipe(pipefd);
 		if((pid = fork()) == 0){
@@ -117,23 +126,12 @@ void run_cmd(struct cmdline *l){
 		}
 	}
 	if(l->bg){
-		//Ajout là
-		jobs[currentIndex] = createWithInfos(pid,RUNNING,l->seq[0][0]);
-		//
-		currentIndex++;
+		jobs[currentIndex++] = createWithInfos(pid,RUNNING,l->seq[0][0]);
 		nbJobs++;
 		printf("[%d] %d\n",currentIndex,pid);
 	} else {
-		toKill = pid;
+		fg = createWithInfos(pid,RUNNING, l->seq[0][0]);;
 		waitpid(pid,&status,WUNTRACED);
-		if(WIFSTOPPED(status)){
-			//Ajout là
-			jobs[currentIndex] = createWithInfos(pid,STOPPED, l->seq[0][0]);
-			//
-			currentIndex++;
-			nbJobs++;
-			printf("\n[%d]+  %s                 pid=%d\n",currentIndex,etat_jobs[jobs[currentIndex-1].etat] ,pid);
-		}
 	}
 }
 
@@ -151,7 +149,8 @@ void bgAndStopCore(char ** word, char* cmd, char * string, int oldEtat, int newE
 		if ((num = getIndexFromCmd(word)) != -1){
 			if (jobs[num].etat == oldEtat){
 				kill(jobs[num].pid, sig);
-				changeEtat(num,newEtat);
+				changeEtat(jobs[num].pid,newEtat);
+				printf("\n[%d]+ %s &\n", num+1, jobs[num].nom);
 			} else
 				printf("shell: %s: la tâche %d est déjà %s\n", cmd, num+1, string);
 		} else
@@ -160,7 +159,8 @@ void bgAndStopCore(char ** word, char* cmd, char * string, int oldEtat, int newE
 		for (num=currentIndex-1; num>=0 && jobs[num].pid==-1 && jobs[num].etat != oldEtat; num--);
 		if (num >= 0) {	
 			kill(jobs[num].pid, sig);
-			changeEtat(num,newEtat);
+			changeEtat(jobs[num].pid,newEtat);
+			printf("\n[%d]+ %s &\n", num+1, jobs[num].nom);
 		} else {
 			for (num=currentIndex-1; num>=0 && jobs[num].pid==-1; num--);
 			if (num >= 0)
@@ -172,48 +172,48 @@ void bgAndStopCore(char ** word, char* cmd, char * string, int oldEtat, int newE
 
 }
 
+void fgProcess(int num){
+	fg = createWithInfos(jobs[num].pid,RUNNING, jobs[num].nom);
+	jobs[num].pid = -1;
+	if (num == currentIndex -1) currentIndex--;
+	currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
+	kill(fg.pid, SIGCONT);
+	printf("%s\n",jobs[num].nom);
+	waitpid(fg.pid, NULL, WUNTRACED);
+}
+
+void fgCore(char ** word){
+	int num;
+	if (word[1] != NULL){
+		if ((num = getIndexFromCmd(word)) != -1)
+			fgProcess(num);
+		else
+			printf("shell: fg: %s : tâche inexistante\n", word[1]);
+	} else {
+		for (num=currentIndex-1; num>=0 && jobs[num].pid==-1; num--);
+		if (num >= 0)
+			fgProcess(num);
+		else 		
+			printf("bash: fg: courant : tâche inexistante\n");
+	}
+}
+
 int extra_cmd(char** word){
 	int ret = 0;
-	int num;
+	int i;
 	if (strcmp(word[0],"jobs") == 0){
-		for (num=0; num<currentIndex; num++)
-			if (jobs[num].pid != -1)
-				printf("[%d]+ %s pid=%d \t %s \n", num+1,etat_jobs[jobs[num].etat] ,jobs[num].pid, jobs[num].nom); 
+		for (i=0; i<currentIndex; i++)
+			if (jobs[i].pid != -1)
+				printf("[%d]   %s\t\t\t%s\n", i+1,etat_jobs[jobs[i].etat], jobs[i].nom); 
 		ret = 1;	
 	} else if (strcmp(word[0],"fg") == 0){
-		
-		if (word[1] != NULL){
-			if (word[1][0] == '%' && (num = atoi(&word[1][1])) > 0 && --num < currentIndex && jobs[num].pid != -1){
-				toKill = jobs[num].pid;
-				jobs[num].pid = -1;
-				kill(toKill, SIGCONT);
-				printf("%s\n",jobs[num].nom);
-				waitpid(toKill, NULL, WUNTRACED);
-			} else if (word[1][0] != '%' && (num = getIndexJobByPid(atoi(word[1]))) != -1){
-				toKill = jobs[num].pid;
-				jobs[num].pid = -1;
-				kill(toKill, SIGCONT);
-				printf("%s\n",jobs[num].nom);
-				waitpid(toKill, NULL, WUNTRACED);
-			} else
-				printf("shell: fg: %s : tâche inexistante\n", word[1]);
-		} else {
-			for (num=currentIndex-1; num>=0 && jobs[num].pid==-1; num--);
-			if (num >= 0) {	
-				toKill = jobs[num].pid;
-				jobs[num].pid = -1;
-				kill(toKill, SIGCONT);
-				printf("%s\n",jobs[num].nom);
-				waitpid(toKill, NULL, WUNTRACED);
-			} else 		
-				printf("bash: fg: courant : tâche inexistante\n");
-		}
+		fgCore(word);
 		ret = 1;		
 	} else if (strcmp(word[0],"bg") == 0){
 		bgAndStopCore(word, "bg", "en arrière plan", STOPPED, RUNNING, SIGCONT);
 		ret = 1;
 	} else if (strcmp(word[0],"stop") == 0){
-		bgAndStopCore(word, "stop", "arrêtée", STOPPED, RUNNING, SIGCONT);
+		bgAndStopCore(word, "stop", "arrêtée", RUNNING, STOPPED, SIGSTOP);
 		ret = 1;	
 	}
 	return ret;
@@ -237,25 +237,11 @@ int main()
 			printf("exit\n");
 			exit(0);
 		}
-
 		if (l->err) {
 			/* Syntax error, read another command */
 			printf("error: %s\n", l->err);
 			continue;
 		}
-		/**
-		if (l->in) printf("in: %s\n", l->in);
-		if (l->out) printf("out: %s\n", l->out);
-
-		Display each command of the pipe 
-		for (i=0; l->seq[i]!=0; i++) {
-			char **cmd = l->seq[i];
-			//printf("seq[%d]: ", i);
-			for (j=0; cmd[j]!=0; j++) {
-				//printf("%s ", cmd[j]);
-			}
-			printf("\n");
-		}**/
 		if(l->seq[0]!=0 && !extra_cmd(l->seq[0]))
 			run_cmd(l);
 		else if (l->seq[0]==0)
