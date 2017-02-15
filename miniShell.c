@@ -65,10 +65,7 @@ void handler_ctrlc(int sig){
 }
 
 void handler_ctrlz(int sig){
-	if (fg.pid != -1 && getIndexJobByPid(fg.pid) != -1){
-		changeEtat(fg.pid,STOPPED);
-		kill(fg.pid, sig);
-	} else if (fg.pid != -1){
+	if (fg.pid != -1){
 		jobs[currentIndex] = createWithInfos(fg.pid,STOPPED, fg.nom);
 		kill(jobs[currentIndex].pid, sig);
 		currentIndex++;
