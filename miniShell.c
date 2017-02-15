@@ -59,7 +59,7 @@ void display_prompt() {
 void handler_ctrlc(int sig){
 	printf("\n");
 	if (fg.pid != -1)
-		kill(fg.pid, SIGINT);
+		kill(fg.pid, sig);
 	else
 		display_prompt();
 }
@@ -67,10 +67,10 @@ void handler_ctrlc(int sig){
 void handler_ctrlz(int sig){
 	if (fg.pid != -1 && getIndexJobByPid(fg.pid) != -1){
 		changeEtat(fg.pid,STOPPED);
-		kill(fg.pid, SIGTSTP);
+		kill(fg.pid, sig);
 	} else if (fg.pid != -1){
 		jobs[currentIndex] = createWithInfos(fg.pid,STOPPED, fg.nom);
-		kill(jobs[currentIndex].pid, SIGTSTP);
+		kill(jobs[currentIndex].pid, sig);
 		currentIndex++;
 		nbJobs++;
 		printf("\n[%d]+  %s\t\t\t%s\n",currentIndex,etat_jobs[jobs[currentIndex-1].etat] ,jobs[currentIndex-1].nom);
@@ -78,7 +78,7 @@ void handler_ctrlz(int sig){
 	}
 }
 
-void handler_child(int sig){
+void handler_child(){
 	int pid, i;
 	while ((pid = waitpid(-1, NULL, WNOHANG)) > 0){
 		for (i=0; i<currentIndex && jobs[i].pid!=pid ; i++);
@@ -96,43 +96,6 @@ void redirection(char* in_out, int pip){
 	int fd = open(in_out, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 	dup2(fd, pip);
 	close(fd);
-}
-
-void run_cmd(struct cmdline *l){
-	int pid = 0;
-	int index = 0;
-	int pipefd[2];
-	int fd_in = 0;
-	int status;
-	fg = createWithInfos(-1,STOPPED, "");
-	while(l->seq[index]!=0){
-		pipe(pipefd);
-		if((pid = fork()) == 0){
-			if (l->bg)                                      setpgid(pid, pid);
-			else{						signal(SIGINT,  SIG_DFL);
-									signal(SIGTSTP, SIG_DFL);}	
-			if (index == 0 && l->in != NULL) 		redirection(l->in,0);
-			else  						dup2(fd_in, 0);
-			if (l->seq[index+1] == 0 && l->out != NULL)	redirection(l->out,1);
-			else if (l->seq[index+1] != 0) 			dup2(pipefd[1], 1);
-			dup2(fd_in, 0);
-			close(pipefd[0]);
-			if (execvp(l->seq[index][0],l->seq[index]) == -1)
-				exit(0);
-		} else {
-			close(pipefd[1]);
-			fd_in = pipefd[0];
-			index++;
-		}
-	}
-	if(l->bg){
-		jobs[currentIndex++] = createWithInfos(pid,RUNNING,l->seq[0][0]);
-		nbJobs++;
-		printf("[%d] %d\n",currentIndex,pid);
-	} else {
-		fg = createWithInfos(pid,RUNNING, l->seq[0][0]);;
-		waitpid(pid,&status,WUNTRACED);
-	}
 }
 
 int getIndexFromCmd(char ** word){
@@ -219,9 +182,46 @@ int extra_cmd(char** word){
 	return ret;
 }
 
+void run_cmd(struct cmdline *l){
+	int pid = 0;
+	int index = 0;
+	int pipefd[2];
+	int fd_in = 0;
+	int status;
+	fg = createWithInfos(-1,STOPPED, "");
+	while(l->seq[index]!=0){
+		pipe(pipefd);
+		if((pid = fork()) == 0){
+			if (l->bg)                                      setpgid(pid, pid);
+			else{						signal(SIGINT,  SIG_DFL);
+									signal(SIGTSTP, SIG_DFL);}	
+			if (index == 0 && l->in != NULL) 		redirection(l->in,0);
+			else  						dup2(fd_in, 0);
+			if (l->seq[index+1] == 0 && l->out != NULL)	redirection(l->out,1);
+			else if (l->seq[index+1] != 0) 			dup2(pipefd[1], 1);
+			dup2(fd_in, 0);
+			close(pipefd[0]);
+			if (execvp(l->seq[index][0],l->seq[index]) == -1)
+				exit(0);
+		} else {
+			close(pipefd[1]);
+			fd_in = pipefd[0];
+			index++;
+		}
+	}
+	if(l->bg){
+		jobs[currentIndex++] = createWithInfos(pid,RUNNING,l->seq[0][0]);
+		nbJobs++;
+		printf("[%d] %d\n",currentIndex,pid);
+	} else {
+		fg = createWithInfos(pid,RUNNING, l->seq[0][0]);;
+		waitpid(pid,&status,WUNTRACED);
+	}
+}
+
 int main()
 {
-
+	int i;
 	signal(SIGINT, handler_ctrlc);
 	signal(SIGTSTP, handler_ctrlz);
 	signal(SIGCHLD, handler_child);
@@ -234,7 +234,9 @@ int main()
 
 		/* If input stream closed, normal termination */
 		if (!l) {
-			printf("exit\n");
+			for (i=0; i<currentIndex; i++)
+				if (jobs[i].pid != -1)
+					kill(jobs[i].pid, SIGINT);
 			exit(0);
 		}
 		if (l->err) {
