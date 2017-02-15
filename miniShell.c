@@ -17,7 +17,7 @@
 struct jobs_etat jobs[100];
 int currentIndex = 0;
 int nbJobs = 0;
-int toKill =0;
+int toKill = -1;
 
 int getIndexJobByPid(int pid){
 	int i;
@@ -57,20 +57,17 @@ void display_prompt() {
 }
 
 void handler_ctrlc(int sig){
-	int i;	
-	for (i=0; i<currentIndex && jobs[i].pid!=toKill ; i++);
-	if (i != currentIndex){		
-		jobs[i].pid = -1;
-		currentIndex = ((--nbJobs) == 0 ? 0 : currentIndex);
-		printf("\n[%d]+  Fini 		pid=%d\n", i+1, toKill);
-	}
-	kill(toKill, SIGINT);
+	if (toKill != -1)
+		kill(toKill, SIGINT);
+	printf("\n");
 }
 
 void handler_ctrlz(int sig){
-	changeEtat(toKill,STOPPED);
-	printf("\n[%d]+  %s                 pid=%d\n",currentIndex,etat_jobs[jobs[currentIndex-1].etat] ,toKill);
-	kill(toKill, SIGTSTP);
+	if (toKill != -1 && getIndexJobByPid(toKill) != -1){
+		changeEtat(toKill,STOPPED);
+		kill(toKill, SIGTSTP);
+	}
+	printf("\n");
 }
 
 void handler_child(int sig){
@@ -140,48 +137,83 @@ void run_cmd(struct cmdline *l){
 	}
 }
 
+int getIndexFromCmd(char ** word){
+	int num;
+	if (word[1][0] == '%' && (num = atoi(&word[1][1])) > 0 && --num < currentIndex && jobs[num].pid != -1);
+	else if (word[1][0] != '%' && (num = getIndexJobByPid(atoi(word[1]))) != -1);
+	else num = -1;
+	return num;
+}
+
+void bgAndStopCore(char ** word, char* cmd, char * string, int oldEtat, int newEtat, int sig){
+	int num;	
+	if (word[1] != NULL){
+		if ((num = getIndexFromCmd(word)) != -1){
+			if (jobs[num].etat == oldEtat){
+				kill(jobs[num].pid, sig);
+				changeEtat(num,newEtat);
+			} else
+				printf("shell: %s: la tâche %d est déjà %s\n", cmd, num+1, string);
+		} else
+			printf("shell: %s: %s : tâche inexistante\n", cmd, word[1]);
+	} else {
+		for (num=currentIndex-1; num>=0 && jobs[num].pid==-1 && jobs[num].etat != oldEtat; num--);
+		if (num >= 0) {	
+			kill(jobs[num].pid, sig);
+			changeEtat(num,newEtat);
+		} else {
+			for (num=currentIndex-1; num>=0 && jobs[num].pid==-1; num--);
+			if (num >= 0)
+				printf("shell: %s: la tâche %d est déjà %s\n", cmd, num, string);
+			else
+				printf("shell: %s: courant : tâche inexistante\n", cmd);
+		}
+	}
+
+}
+
 int extra_cmd(char** word){
 	int ret = 0;
-	int num, i;
+	int num;
 	if (strcmp(word[0],"jobs") == 0){
-		for (i=0; i<currentIndex; i++)
-			if (jobs[i].pid != -1)
-				printf("[%d]+ %s pid=%d \t %s \n", i+1,etat_jobs[jobs[i].etat] ,jobs[i].pid, jobs[i].nom); 
+		for (num=0; num<currentIndex; num++)
+			if (jobs[num].pid != -1)
+				printf("[%d]+ %s pid=%d \t %s \n", num+1,etat_jobs[jobs[num].etat] ,jobs[num].pid, jobs[num].nom); 
 		ret = 1;	
 	} else if (strcmp(word[0],"fg") == 0){
-
+		
 		if (word[1] != NULL){
-			if (word[1][0] == '%' && (num = atoi(&word[1][1])) > 0 && num <= currentIndex && jobs[num-1].pid != -1){
-				toKill = jobs[num-1].pid;
-				kill(jobs[num-1].pid, SIGCONT);
-				waitpid(jobs[num-1].pid, NULL, WUNTRACED);
+			if (word[1][0] == '%' && (num = atoi(&word[1][1])) > 0 && --num < currentIndex && jobs[num].pid != -1){
+				toKill = jobs[num].pid;
+				jobs[num].pid = -1;
+				kill(toKill, SIGCONT);
+				printf("%s\n",jobs[num].nom);
+				waitpid(toKill, NULL, WUNTRACED);
 			} else if (word[1][0] != '%' && (num = getIndexJobByPid(atoi(word[1]))) != -1){
 				toKill = jobs[num].pid;
-				kill(jobs[num].pid, SIGCONT);
-				waitpid(jobs[num].pid, NULL, WUNTRACED);
+				jobs[num].pid = -1;
+				kill(toKill, SIGCONT);
+				printf("%s\n",jobs[num].nom);
+				waitpid(toKill, NULL, WUNTRACED);
 			} else
-				printf("shell: fg: %s : Tâche inexistante\n", word[1]);
+				printf("shell: fg: %s : tâche inexistante\n", word[1]);
 		} else {
-			for (i=currentIndex-1; i>=0 && jobs[i].pid==-1; i--);
-			if (i >= 0) {	
-				toKill = jobs[i].pid;
-				kill(jobs[i].pid, SIGCONT);
-				waitpid(jobs[i].pid, NULL, WUNTRACED);
+			for (num=currentIndex-1; num>=0 && jobs[num].pid==-1; num--);
+			if (num >= 0) {	
+				toKill = jobs[num].pid;
+				jobs[num].pid = -1;
+				kill(toKill, SIGCONT);
+				printf("%s\n",jobs[num].nom);
+				waitpid(toKill, NULL, WUNTRACED);
 			} else 		
-				printf("Aucun jobs en cours d'exécution\n");
+				printf("bash: fg: courant : tâche inexistante\n");
 		}
 		ret = 1;		
 	} else if (strcmp(word[0],"bg") == 0){
-		if ((num = atoi(word[1])) > 0){
-			kill(num, SIGCONT);
-			changeEtat(num,RUNNING);
-		}
+		bgAndStopCore(word, "bg", "en arrière plan", STOPPED, RUNNING, SIGCONT);
 		ret = 1;
 	} else if (strcmp(word[0],"stop") == 0){
-		if ((num = atoi(word[1])) > 0){
-			kill(num, SIGSTOP);
-			changeEtat(num, STOPPED);	
-		}
+		bgAndStopCore(word, "stop", "arrêtée", STOPPED, RUNNING, SIGCONT);
 		ret = 1;	
 	}
 	return ret;
