@@ -1,15 +1,11 @@
 #define _POSIX_SOURCE
 #define _DEFAULT_SOURCE
-#include <signal.h>
 #include <stdlib.h>
 #include <sys/wait.h>
-#include <sys/types.h>
 #include <fcntl.h>
-#include <sys/stat.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include <errno.h>
 #include "readcmd.h"
 #include "jobs.h"
 
@@ -198,8 +194,10 @@ void run_cmd(struct cmdline *l){
 			else if (l->seq[index+1] != 0) 			dup2(pipefd[1], 1);
 			dup2(fd_in, 0);
 			close(pipefd[0]);
-			if (execvp(l->seq[index][0],l->seq[index]) == -1)
+			if (execvp(l->seq[index][0],l->seq[index]) == -1){
+				printf("%s: command not found\n",l->seq[index][0]);
 				exit(0);
+			}
 		} else {
 			close(pipefd[1]);
 			fd_in = pipefd[0];
