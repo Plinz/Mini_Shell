@@ -54,20 +54,23 @@ void display_prompt() {
 
 void handler_ctrlc(int sig){
 	printf("\n");
-	if (fg.pid != -1)
+	if (fg.pid > 0)
 		kill(fg.pid, sig);
 	else
 		display_prompt();
 }
 
 void handler_ctrlz(int sig){
-	if (fg.pid != -1){
+	if (fg.pid > 0){
 		jobs[currentIndex] = createWithInfos(fg.pid,STOPPED, fg.nom);
 		kill(jobs[currentIndex].pid, sig);
 		currentIndex++;
 		nbJobs++;
 		printf("\n[%d]+  %s\t\t\t%s\n",currentIndex,etat_jobs[jobs[currentIndex-1].etat] ,jobs[currentIndex-1].nom);
 		fg.pid = -1;
+	} else {
+		printf("\n");
+		display_prompt();
 	}
 }
 
@@ -232,6 +235,7 @@ int main()
 			for (i=0; i<currentIndex; i++)
 				if (jobs[i].pid != -1)
 					kill(jobs[i].pid, SIGINT);
+			printf("\n");			
 			exit(0);
 		}
 		if (l->err) {
@@ -241,8 +245,6 @@ int main()
 		}
 		if(l->seq[0]!=0 && !extra_cmd(l->seq[0]))
 			run_cmd(l);
-		else if (l->seq[0]==0)
-			printf("\n");
 	}
 }
 
