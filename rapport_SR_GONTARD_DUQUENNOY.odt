@@ -31,19 +31,6 @@ Contient le programme principal et les fonctions nous permettant de gérer la cr
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 Réalisations : 
 
 Quelques précisions sont à apporter quand à l'organisation général de notre code afin de faciliter la compréhension de la partie suivante :
@@ -53,6 +40,8 @@ Quelques précisions sont à apporter quand à l'organisation général de notre
 -Lorsqu'on insère un jobs dans la table, alors on incrémente son indice de 1.
 -Si lorsqu'on supprime un  job et que celui ci était le dernier inséré dans la table de jobs, alors on décrémente son indice de 1.
 -Si lorsqu'on supprime un job et que celui ci n'était pas le dernier dans la table des jobs, alors l'indice ne bouge pas. Nous avons recrée le comportement du shell bash tel qu'il est sur les machines de l'IM2AG.
+-Le comportement des commandes spéciales telles que jobs, bg, fg et stop est spécial : lorsque l'utilisateur rentre une instruction sur le shell, nous examinons le nom de la première commande afin de savoir si elle fait partie des mots clés spécifiques précédent afin de réaliser un traitement spécifique.
+
 
 
 -Gestion de commandes jointes par des tubes  :
@@ -94,12 +83,21 @@ Pour celà, nous utilisons l'instruction waitpid(-1, NULL, WNOHANG)) afin de ré
 -Commande intégrée : jobs : 
 
 Nous avons implémenté la commande jobs de la manière suivante : si l'utilisateur entre la commande "jobs" dans le shell, alors nous affichons la liste des processus en arrière plan, qu'ils soient en pause ou en cours d'exécution.
-Grâce à la structure spécifiée dans le fichier jobs.h, nous gardons dans une table des jobs en variable globale toutes les informations nécessaires à leur affichage :
+Grâce à la structure spécifiée dans le fichier jobs.h, nous gardons dans une table des jobs, en variable globale, toutes les informations nécessaires à leur affichage :
 -PID.
 -Etat courant (Pause ou actif).
 -nom.
 
 -Agir sur les commandes en arrière plan :
+
+Lorsque l'utilisateur entre le mot clé bg suivi soit du pid du processus qu'il souhaite passer en arrière plan, soit du numéro de job de ce processus, alors le programme envoi un signal SIGCONT à ce processus afin qu'il reprenne son exécution mais en arrière plan. Ceci change aussi son état courant dans la table des jobs (passe en RUNNING).
+
+Lorsque l'utilisateur entre le mot clé fg seulement, alors le dernier processus qui était en premier plan, si celui ci a été basculé en arrière plan et est toujours en train de s'exécuter, repasse en premier plan.
+Si l'utilisateur spécifie lui même le numéro du job qu'il souhaite faire passer en premier plan (les numéros de jobs sont consultables via la commande spéciale "jobs"), alors il repassera effectivement en premier plan.
+Pour celà, le programme effectue un waitpid(pid, NULL, WUNTRACED), comme lorsque nous souhaitions lancer une commande en premier plan.
+
+Lorsque l'utilisateur entre le mot clé stop suivi soit du pid du processus qu'il souhaite mettre en pause, soit du numéro de job de ce processus, alors le programme envoi un signal SIGSTOP à ce processus afin qu'il se mette en pause. Ceci change aussi son état courant dans la table des jobs (passe en STOPPED).
+
 
 
 
