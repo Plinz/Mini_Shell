@@ -46,6 +46,15 @@ Contient le programme principal et les fonctions nous permettant de gérer la cr
 
 Réalisations : 
 
+Quelques précisions sont à apporter quand à l'organisation général de notre code afin de faciliter la compréhension de la partie suivante :
+-Nous avons en variable globale une table des "jobs" qui nous permet de stocker tout les processus qui sont actuellement en pause ou en arrière plan.
+-Nous gardons dans une variable globale les informations concernant le processus en premier plan, notamment son pid, si il y en a un.
+-Une variable globale permet de savoir à quel indice de la table des jobs doit être inséré le processus à mettre en arrière plan suivant, celui ci fonctionne de la manière suivante 
+-Lorsqu'on insère un jobs dans la table, alors on incrémente son indice de 1.
+-Si lorsqu'on supprime un  job et que celui ci était le dernier inséré dans la table de jobs, alors on décrémente son indice de 1.
+-Si lorsqu'on supprime un job et que celui ci n'était pas le dernier dans la table des jobs, alors l'indice ne bouge pas. Nous avons recrée le comportement du shell bash tel qu'il est sur les machines de l'IM2AG.
+
+
 -Gestion de commandes jointes par des tubes  :
 
 Il est possible de d’exécuter plusieurs commandes en parallèle. Ces commandes communiquent via des pipes.
