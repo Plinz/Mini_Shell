@@ -8,7 +8,7 @@ Groupe de TD numéro 2
 RAPPORT DE PROJET :
 MINI SHELL
 
-Structure gloable du programme : 
+Structure globale du programme : 
 
 Notre projet se découpe en plusieurs sous fichiers :
 
@@ -26,7 +26,7 @@ Contient une structure permettant de connaître différentes informations sur jo
  
 
 -miniShell.c : 
-Contient le programme principal et les fonctions nous permettant de gérer la création de tubes, la communication entre le différentes commandes pipées et la gestion des signaux.
+Contient le programme principal et les fonctions nous permettant de gérer la création de tubes, la communication entre les différentes commandes pipées et la gestion des signaux.
 
 
 
@@ -78,7 +78,21 @@ La même méthode est utilisée pour le handler su signal SIGTSTP, à la différ
 
 -Gestion des zombis :
 
-Pour éviter que les fichiers en arrière plan soient attendus par le shell, si nous savons qu’un processus doit s’exécuter en arrière (quand l’utilisateur le spécifie explicitement via le caractère clé &). 
+Pour éviter que les fichiers en arrière plan soient attendus par le shell, si nous savons qu’un processus doit s’exécuter en arrière plan(quand l’utilisateur le spécifie explicitement via le caractère clé &) alors nous ajoutons ce processus dans la table des jobs afin de pouvoir le récupérer plus tard.
+De ce fait, nous avons implémenté un traitant du signal SIGCHLD afin que lorsqu'un des processus fils meure, nous puissions récupérer son pid afin de le retirer de la table des processus en arrière plan si il était effectivement en arrière plan ou de ne rien faire si il était en premier plan.
+Pour celà, nous utilisons l'instruction waitpid(-1, NULL, WNOHANG)) afin de récupérer le fils qui est sur le point de se terminer, afin de ne pas générer de zombis.
+
+-Commande intégrée : jobs : 
+
+Nous avons implémenté la commande jobs de la manière suivante : si l'utilisateur entre la commande "jobs" dans le shell, alors nous affichons la liste des processus en arrière plan, qu'ils soient en pause ou en cours d'exécution.
+Grâce à la structure spécifiée dans le fichier jobs.h, nous gardons dans une table des jobs en variable globale toutes les informations nécessaires à leur affichage :
+-PID.
+-Etat courant (Pause ou actif).
+-nom.
+
+-Agir sur les commandes en arrière plan :
+
+
 
 
 
